@@ -13,7 +13,7 @@ import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
 import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
-import {makeTranslator} from './locale.js';
+import {makeTranslator} from './lib/locale.js';
 
 const API_URL   = 'https://api.anthropic.com/api/oauth/usage';
 const TRACE_URL = 'https://claude.ai/cdn-cgi/trace';

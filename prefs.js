@@ -5,7 +5,7 @@ import Gio from 'gi://Gio';
 
 import {ExtensionPreferences} from 'resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js';
 
-import {LANGUAGES, makeTranslator} from './locale.js';
+import {LANGUAGES, makeTranslator} from './lib/locale.js';
 
 export default class ClaudeUsagePrefs extends ExtensionPreferences {
     fillPreferencesWindow(window) {

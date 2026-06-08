@@ -1,25 +1,27 @@
-UUID = claude-usage@langya466.github.com
-INSTALL_DIR = $(HOME)/.local/share/gnome-shell/extensions/$(UUID)
+UUID         = claude-usage@langya466.github.com
+INSTALL_DIR  = $(HOME)/.local/share/gnome-shell/extensions/$(UUID)
+SCHEMA_XML   = schemas/org.gnome.shell.extensions.claude-usage.gschema.xml
+SOURCES      = metadata.json extension.js prefs.js
+LIB_SOURCES  = lib/locale.js
+DOCS         = README.md README.zh-CN.md LICENSE
 
-FILES = metadata.json extension.js prefs.js locale.js README.md README.zh-CN.md LICENSE \
-        schemas/gschemas.compiled \
-        schemas/org.gnome.shell.extensions.claude-usage.gschema.xml
-
-.PHONY: all schemas install uninstall zip clean enable disable
+.PHONY: all schemas install uninstall enable disable reload zip clean
 
 all: schemas
 
 schemas: schemas/gschemas.compiled
 
-schemas/gschemas.compiled: schemas/org.gnome.shell.extensions.claude-usage.gschema.xml
+schemas/gschemas.compiled: $(SCHEMA_XML)
 	glib-compile-schemas schemas
 
 install: all
-	mkdir -p "$(INSTALL_DIR)/schemas"
-	cp metadata.json extension.js prefs.js locale.js README.md README.zh-CN.md LICENSE "$(INSTALL_DIR)/"
-	cp schemas/*.xml schemas/gschemas.compiled "$(INSTALL_DIR)/schemas/"
-	@echo "Installed. Reload GNOME Shell (logout/login, or Alt+F2 -> r on X11)."
-	@echo "Then: gnome-extensions enable $(UUID)"
+	mkdir -p "$(INSTALL_DIR)/lib" "$(INSTALL_DIR)/schemas"
+	cp $(SOURCES) $(DOCS) "$(INSTALL_DIR)/"
+	cp $(LIB_SOURCES) "$(INSTALL_DIR)/lib/"
+	cp $(SCHEMA_XML) schemas/gschemas.compiled "$(INSTALL_DIR)/schemas/"
+	@echo "Installed to $(INSTALL_DIR)"
+	@echo "Reload GNOME Shell (logout/login, or Alt+F2 -> r on X11), then:"
+	@echo "    gnome-extensions enable $(UUID)"
 
 uninstall:
 	rm -rf "$(INSTALL_DIR)"
@@ -32,7 +34,7 @@ disable:
 
 zip: all
 	rm -f $(UUID).zip
-	zip -r $(UUID).zip metadata.json extension.js prefs.js locale.js README.md README.zh-CN.md LICENSE schemas/
+	zip -r $(UUID).zip $(SOURCES) $(DOCS) lib schemas
 
 clean:
 	rm -f schemas/gschemas.compiled $(UUID).zip

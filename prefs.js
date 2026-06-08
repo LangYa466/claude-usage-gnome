@@ -1,66 +1,109 @@
 import Adw from 'gi://Adw';
 import Gtk from 'gi://Gtk';
+import GObject from 'gi://GObject';
 import Gio from 'gi://Gio';
 
 import {ExtensionPreferences} from 'resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js';
 
+import {LANGUAGES, makeTranslator} from './locale.js';
+
 export default class ClaudeUsagePrefs extends ExtensionPreferences {
     fillPreferencesWindow(window) {
         const settings = this.getSettings();
+        const t = makeTranslator(settings);
 
-        const page = new Adw.PreferencesPage({title: '设置', icon_name: 'preferences-system-symbolic'});
+        const page = new Adw.PreferencesPage({
+            title: t('prefs.page.title'),
+            icon_name: 'preferences-system-symbolic',
+        });
         window.add(page);
 
-        // ── 出口节点 ──
+        // Geo
         const geo = new Adw.PreferencesGroup({
-            title: '出口节点校验',
-            description: '请求 usage 之前先 GET claude.ai/cdn-cgi/trace，colo / loc 都匹配才发请求',
+            title: t('prefs.group.geo.title'),
+            description: t('prefs.group.geo.subtitle'),
         });
         page.add(geo);
+        geo.add(this._entryRow(settings, 'colo',
+            t('prefs.row.colo.title'), t('prefs.row.colo.subtitle')));
+        geo.add(this._entryRow(settings, 'loc',
+            t('prefs.row.loc.title'), t('prefs.row.loc.subtitle')));
 
-        geo.add(this._entryRow(settings, 'colo', 'colo', '期望的 Cloudflare 节点，默认 NRT（东京）'));
-        geo.add(this._entryRow(settings, 'loc',  'loc',  '期望的国家代码，默认 JP'));
-
-        // ── token ──
+        // Token
         const tok = new Adw.PreferencesGroup({
-            title: 'Token',
-            description: '从 credentials.json 读 OAuth accessToken',
+            title: t('prefs.group.token.title'),
+            description: t('prefs.group.token.subtitle'),
         });
         page.add(tok);
-        tok.add(this._entryRow(settings, 'credentials-path', 'jsonpath',
-            '留空自动找 ~/.claude/.credentials.json'));
+        tok.add(this._entryRow(settings, 'credentials-path',
+            t('prefs.row.jsonpath.title'), t('prefs.row.jsonpath.subtitle')));
 
-        // ── 刷新 ──
+        // Refresh
         const ref = new Adw.PreferencesGroup({
-            title: '刷新',
-            description: '默认 3 分钟；小于默认值容易被 API 速率限制（HTTP 429）',
+            title: t('prefs.group.refresh.title'),
+            description: t('prefs.group.refresh.subtitle'),
         });
         page.add(ref);
 
         const spinRow = new Adw.SpinRow({
-            title: '间隔（分钟）',
-            subtitle: '太低会触发限流',
+            title:    t('prefs.row.interval.title'),
+            subtitle: t('prefs.row.interval.subtitle'),
             adjustment: new Gtk.Adjustment({lower: 1, upper: 180, step_increment: 1}),
         });
         settings.bind('interval-min', spinRow, 'value', Gio.SettingsBindFlags.DEFAULT);
         ref.add(spinRow);
 
         const switchRow = new Adw.SwitchRow({
-            title: '开机后首次必须手动刷新',
-            subtitle: '开机后出口/token 常没就绪，自动拉容易误报失败；勾选后只在你手动点击时获取',
+            title:    t('prefs.row.manual.title'),
+            subtitle: t('prefs.row.manual.subtitle'),
         });
         settings.bind('manual-first', switchRow, 'active', Gio.SettingsBindFlags.DEFAULT);
         ref.add(switchRow);
+
+        // Language
+        const lang = new Adw.PreferencesGroup({
+            title: t('prefs.group.lang.title'),
+            description: t('prefs.group.lang.subtitle'),
+        });
+        page.add(lang);
+        lang.add(this._languageRow(settings, t));
     }
 
     _entryRow(settings, key, title, subtitle) {
+        // EntryRow doesn't support subtitle; surface it as the placeholder/tooltip.
         const row = new Adw.EntryRow({title, text: settings.get_string(key)});
-        if (subtitle && row.set_show_apply_button) row.set_show_apply_button(false);
-        // EntryRow 不支持 subtitle；用 ActionRow 包一个 Entry 也可，但简单点直接绑 EntryRow
-        row.connect('changed', () => settings.set_string(key, row.get_text()));
+        if (subtitle) row.set_tooltip_text(subtitle);
+        row.connect('changed', () => {
+            const v = row.get_text();
+            if (settings.get_string(key) !== v) settings.set_string(key, v);
+        });
         settings.connect('changed::' + key, () => {
             const v = settings.get_string(key);
             if (row.get_text() !== v) row.set_text(v);
+        });
+        return row;
+    }
+
+    _languageRow(settings, t) {
+        const model = Gtk.StringList.new(LANGUAGES.map(l => l.label));
+        const row = new Adw.ComboRow({
+            title: t('prefs.row.lang.title'),
+            model,
+        });
+        const current = settings.get_string('language');
+        const idx = Math.max(0, LANGUAGES.findIndex(l => l.id === current));
+        row.set_selected(idx);
+
+        row.connect('notify::selected', () => {
+            const sel = row.get_selected();
+            const id = LANGUAGES[sel]?.id ?? 'auto';
+            if (settings.get_string('language') !== id)
+                settings.set_string('language', id);
+        });
+        settings.connect('changed::language', () => {
+            const cur = settings.get_string('language');
+            const i = LANGUAGES.findIndex(l => l.id === cur);
+            if (i >= 0 && row.get_selected() !== i) row.set_selected(i);
         });
         return row;
     }

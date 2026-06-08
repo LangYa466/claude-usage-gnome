@@ -1,18 +1,19 @@
-// Claude 用量 GNOME Shell 扩展
-// 顶栏显示两个 label：5h: XX %  7d: XX %
-// 数据来源：~/.claude/.credentials.json 的 accessToken → /api/oauth/usage
-// 请求前先 GET claude.ai/cdn-cgi/trace 校验 colo/loc，不匹配跳过 + 通知
+// Claude usage GNOME Shell extension.
+// Two top-panel labels: 5h: XX %  7d: XX %
+// Data: accessToken from ~/.claude/.credentials.json -> /api/oauth/usage
+// Pre-flight: GET claude.ai/cdn-cgi/trace and skip + notify on colo/loc mismatch.
 
 import GObject from 'gi://GObject';
 import St from 'gi://St';
 import GLib from 'gi://GLib';
-import Gio from 'gi://Gio';
 import Soup from 'gi://Soup';
 import Clutter from 'gi://Clutter';
 
 import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
 import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
+
+import {makeTranslator} from './locale.js';
 
 const API_URL   = 'https://api.anthropic.com/api/oauth/usage';
 const TRACE_URL = 'https://claude.ai/cdn-cgi/trace';
@@ -22,19 +23,17 @@ const GEO_UNKNOWN = 0, GEO_OK = 1, GEO_MISMATCH = 2, GEO_ERROR = 3;
 
 const ClaudeIndicator = GObject.registerClass(
 class ClaudeIndicator extends PanelMenu.Button {
-    _init(ext) {
-        super._init(0.0, 'Claude 用量');
-        this._ext = ext;
-        this._prefix = ext._prefix;   // '5h: ' or '7d: '
+    _init(name, prefix, onClick) {
+        super._init(0.0, name);
+        this._prefix = prefix;
         this._label = new St.Label({
-            text: this._prefix + '-- %',
+            text: prefix + '-- %',
             y_align: Clutter.ActorAlign.CENTER,
             style_class: 'claude-usage-label',
         });
         this.add_child(this._label);
-
         this.connect('button-press-event', () => {
-            this._ext._triggerManualRefresh();
+            onClick();
             return Clutter.EVENT_STOP;
         });
     }
@@ -54,6 +53,7 @@ class ClaudeIndicator extends PanelMenu.Button {
 export default class ClaudeUsageExtension extends Extension {
     enable() {
         this._settings = this.getSettings();
+        this._t = makeTranslator(this._settings);
         this._session = new Soup.Session({user_agent: 'claude-usage-gnome/1.0', timeout: 15});
 
         this._fivePct  = -1;
@@ -66,11 +66,11 @@ export default class ClaudeUsageExtension extends Extension {
         this._firstDone = false;
         this._lastGeo = GEO_UNKNOWN;
         this._inflight = false;
-        this._manualPending = false;
 
-        // 两个独立的 panel button —— 跟原插件一样，可以放在两边/上下两行
-        this._fiveBtn  = this._makeBtn('5h: ', 'claude-5h');
-        this._sevenBtn = this._makeBtn('7d: ', 'claude-7d');
+        this._fiveBtn  = new ClaudeIndicator(this._t('panel.name.5h'), '5h: ',
+                                              () => this._triggerManualRefresh());
+        this._sevenBtn = new ClaudeIndicator(this._t('panel.name.7d'), '7d: ',
+                                              () => this._triggerManualRefresh());
 
         Main.panel.addToStatusArea('claude-usage-5h', this._fiveBtn,  0, 'right');
         Main.panel.addToStatusArea('claude-usage-7d', this._sevenBtn, 1, 'right');
@@ -91,14 +91,9 @@ export default class ClaudeUsageExtension extends Extension {
         this._sevenBtn?.destroy(); this._sevenBtn = null;
         this._session?.abort();    this._session  = null;
         this._settings = null;
+        this._t = null;
     }
 
-    _makeBtn(prefix, key) {
-        const proxy = {_prefix: prefix, _triggerManualRefresh: () => this._triggerManualRefresh()};
-        return new ClaudeIndicator(proxy);
-    }
-
-    // 60 ms 一帧的动画 timer，常驻；非刷新状态下负责把当前百分比刷到 label
     _startAnim() {
         this._animTimer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 60, () => {
             const spin = this._refreshing ||
@@ -117,13 +112,7 @@ export default class ClaudeUsageExtension extends Extension {
 
     _scheduleFirstFetch() {
         const manualFirst = this._settings.get_boolean('manual-first');
-        if (manualFirst) {
-            // 等用户手动点
-            this._fetchTimer = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 1, () => {
-                this._fetchTimer = 0;
-                return GLib.SOURCE_REMOVE;
-            });
-        } else {
+        if (!manualFirst) {
             this._fetchTimer = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 2, () => {
                 this._fetchTimer = 0;
                 this._doFetch(false);
@@ -148,66 +137,65 @@ export default class ClaudeUsageExtension extends Extension {
     }
 
     _notify(msg) {
-        Main.notify('Claude 用量', msg);
+        Main.notify(this._t('notify.title'), msg);
     }
 
     async _doFetch(manual) {
         if (this._inflight) return;
         this._inflight = true;
         try {
-            const cfgColo = this._settings.get_string('colo');
-            const cfgLoc  = this._settings.get_string('loc');
+            const cfgColo  = this._settings.get_string('colo');
+            const cfgLoc   = this._settings.get_string('loc');
             const credPath = this._settings.get_string('credentials-path');
 
-            // 1. trace
             let trace;
             try {
                 trace = await this._httpGet(TRACE_URL, {});
             } catch (e) {
                 this._lastGeo = GEO_ERROR;
-                this._fail('无法连接 claude.ai 校验出口节点：' + e.message, manual);
+                this._fail(this._t('fail.trace.connect', {err: e.message}), manual);
                 return;
             }
             if (trace.status !== 200) {
-                this._fail('trace HTTP ' + trace.status, manual);
+                this._fail(this._t('fail.trace.http', {status: trace.status}), manual);
                 return;
             }
-            const {colo, loc} = this._parseTrace(trace.body);
 
+            const {colo, loc} = this._parseTrace(trace.body);
             if (!ieq(colo, cfgColo) || !ieq(loc, cfgLoc)) {
                 if (this._lastGeo !== GEO_MISMATCH) {
-                    this._notify(`出口节点不匹配，已暂停 API 请求\n当前 colo=${colo} loc=${loc}\n需要 colo=${cfgColo} loc=${cfgLoc}`);
+                    this._notify(this._t('notify.geo.mismatch',
+                        {colo, loc, cfgColo, cfgLoc}));
                 }
                 this._lastGeo = GEO_MISMATCH;
-                this._fail(`出口节点不匹配：colo=${colo} loc=${loc}（需 ${cfgColo}/${cfgLoc}）`, manual);
+                this._fail(this._t('fail.geo.mismatch',
+                    {colo, loc, cfgColo, cfgLoc}), manual);
                 return;
             }
             this._lastGeo = GEO_OK;
 
-            // 2. token
             const token = this._loadToken(credPath);
             if (!token) {
-                this._fail('找不到 OAuth token，请先登录 Claude Code 或在设置里指定 json 路径', manual);
+                this._fail(this._t('fail.token.missing'), manual);
                 return;
             }
 
-            // 3. usage
             let resp;
             try {
                 resp = await this._httpGet(API_URL, {
-                    'Authorization':   'Bearer ' + token,
-                    'anthropic-beta':  'oauth-2025-04-20',
-                    'Content-Type':    'application/json',
-                    'Accept':          'application/json',
+                    'Authorization':  'Bearer ' + token,
+                    'anthropic-beta': 'oauth-2025-04-20',
+                    'Content-Type':   'application/json',
+                    'Accept':         'application/json',
                 });
             } catch (e) {
-                this._fail('网络错误：' + e.message, manual);
+                this._fail(this._t('fail.api.network', {err: e.message}), manual);
                 return;
             }
             if (resp.status !== 200) {
-                if (resp.status === 429)      this._fail('API 被限流（429），稍后重试', manual);
-                else if (resp.status === 401) this._fail('Token 已过期，请重新登录', manual);
-                else                          this._fail('HTTP 错误：' + resp.status, manual);
+                if (resp.status === 429)      this._fail(this._t('fail.api.429'), manual);
+                else if (resp.status === 401) this._fail(this._t('fail.api.401'), manual);
+                else                          this._fail(this._t('fail.api.http', {status: resp.status}), manual);
                 return;
             }
 
@@ -219,11 +207,10 @@ export default class ClaudeUsageExtension extends Extension {
                 if (seven >= 0) this._sevenPct = seven;
                 this._firstDone = true;
             } catch (e) {
-                this._fail('解析用量数据失败', manual);
+                this._fail(this._t('fail.parse'), manual);
                 return;
             }
 
-            // 第一次成功之后启动定时刷新
             if (!this._fetchTimer) this._rescheduleFetch();
         } finally {
             this._refreshing = false;
@@ -232,7 +219,7 @@ export default class ClaudeUsageExtension extends Extension {
     }
 
     _fail(reason, manual) {
-        if (manual) this._notify('刷新失败：\n' + reason);
+        if (manual) this._notify(this._t('notify.refresh.failed', {reason}));
     }
 
     _parseTrace(body) {
@@ -265,7 +252,7 @@ export default class ClaudeUsageExtension extends Extension {
                     ? data.claudeAiOauth : data;
                 if (typeof obj.accessToken === 'string')  return obj.accessToken;
                 if (typeof obj.access_token === 'string') return obj.access_token;
-            } catch (e) {/* try next */}
+            } catch (e) { /* try next */ }
         }
         return '';
     }

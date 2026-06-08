@@ -5,26 +5,34 @@
     <key name="colo" type="s">
       <default>'NRT'</default>
       <summary>Expected Cloudflare colo</summary>
-      <description>校验请求前 cdn-cgi/trace 的 colo 字段</description>
     </key>
     <key name="loc" type="s">
       <default>'JP'</default>
-      <summary>Expected loc</summary>
-      <description>校验请求前 cdn-cgi/trace 的 loc 字段</description>
+      <summary>Expected loc (country code)</summary>
     </key>
     <key name="credentials-path" type="s">
       <default>''</default>
-      <summary>credentials.json 路径</summary>
-      <description>留空自动查找 ~/.claude/.credentials.json</description>
+      <summary>Path to credentials.json</summary>
+      <description>Empty = auto-detect ~/.claude/.credentials.json</description>
     </key>
     <key name="interval-min" type="i">
       <default>3</default>
       <range min="1" max="180"/>
-      <summary>刷新间隔（分钟）</summary>
+      <summary>Refresh interval (minutes)</summary>
     </key>
     <key name="manual-first" type="b">
       <default>false</default>
-      <summary>开机后首次必须手动刷新</summary>
+      <summary>Require manual first refresh</summary>
+    </key>
+    <key name="language" type="s">
+      <choices>
+        <choice value="auto"/>
+        <choice value="en"/>
+        <choice value="zh-CN"/>
+      </choices>
+      <default>'auto'</default>
+      <summary>UI language</summary>
+      <description>auto follows the system locale; otherwise forced to English or Simplified Chinese</description>
     </key>
   </schema>
 </schemalist>

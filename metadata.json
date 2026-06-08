@@ -1,9 +1,9 @@
 {
   "uuid": "claude-usage@langya466.github.com",
-  "name": "Claude 用量",
-  "description": "在顶栏显示 Claude 订阅用量（5h / 7d），请求前校验出口节点（Cloudflare colo / loc）。GNOME 移植自 TrafficMonitor 插件 trafficmonitor-claude-usage。",
+  "name": "Claude Usage",
+  "description": "Show Claude subscription usage (5h / 7d) in the top panel, with a pre-flight Cloudflare exit-node check. GNOME port of trafficmonitor-claude-usage.",
   "shell-version": ["45", "46", "47", "48"],
-  "url": "https://github.com/LangYa466/trafficmonitor-claude-usage",
+  "url": "https://github.com/LangYa466/claude-usage-gnome",
   "settings-schema": "org.gnome.shell.extensions.claude-usage",
   "gettext-domain": "claude-usage",
   "version": 1

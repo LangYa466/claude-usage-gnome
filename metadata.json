@@ -6,5 +6,5 @@
   "url": "https://github.com/LangYa466/claude-usage-gnome",
   "settings-schema": "org.gnome.shell.extensions.claude-usage",
   "gettext-domain": "claude-usage",
-  "version": 1
+  "version": 2
 }

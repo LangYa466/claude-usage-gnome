@@ -39,6 +39,8 @@ class ClaudeIndicator extends PanelMenu.Button {
             text: '5h: -- %',
             y_align: Clutter.ActorAlign.CENTER,
             style_class: 'claude-usage-label',
+            reactive: true,
+            track_hover: true,
         });
         this._sep = new St.Label({
             text: '  ',
@@ -48,15 +50,52 @@ class ClaudeIndicator extends PanelMenu.Button {
             text: '7d: -- %',
             y_align: Clutter.ActorAlign.CENTER,
             style_class: 'claude-usage-label',
+            reactive: true,
+            track_hover: true,
         });
         box.add_child(this._fiveLabel);
         box.add_child(this._sep);
         box.add_child(this._sevenLabel);
 
+        this._tipFn = null;
+        this._tip = new St.Label({
+            style_class: 'claude-usage-tooltip',
+            visible: false,
+            style: 'background-color: rgba(0,0,0,0.85); color: #fff; ' +
+                   'padding: 4px 8px; border-radius: 4px; font-size: 11px;',
+        });
+        Main.layoutManager.uiGroup.add_child(this._tip);
+
+        this._fiveLabel.connect('notify::hover', () => this._onHover(this._fiveLabel, 'five'));
+        this._sevenLabel.connect('notify::hover', () => this._onHover(this._sevenLabel, 'seven'));
+
         this.connect('button-press-event', () => {
             onClick();
             return Clutter.EVENT_STOP;
         });
+    }
+
+    _onHover(label, which) {
+        const text = this._tipFn ? this._tipFn(which) : '';
+        if (label.hover && text) {
+            this._tip.set_text(text);
+            const [x, y] = label.get_transformed_position();
+            const lh = label.get_height();
+            this._tip.set_position(Math.round(x), Math.round(y + lh + 2));
+            this._tip.show();
+        } else {
+            this._tip.hide();
+        }
+    }
+
+    setTooltipProvider(fn) {
+        this._tipFn = fn;
+    }
+
+    destroy() {
+        this._tip?.destroy();
+        this._tip = null;
+        super.destroy();
     }
 
     _fmt(prefix, pct) {
@@ -86,6 +125,8 @@ export default class ClaudeUsageExtension extends Extension {
 
         this._fivePct  = -1;
         this._sevenPct = -1;
+        this._fiveResetMs  = 0;
+        this._sevenResetMs = 0;
         this._refreshing = false;
         this._refreshStart = 0;
         this._animFrame = 0;
@@ -98,6 +139,7 @@ export default class ClaudeUsageExtension extends Extension {
         this._indicator = new ClaudeIndicator(
             this._t('panel.name'),
             () => this._triggerManualRefresh());
+        this._indicator.setTooltipProvider((which) => this._tooltipText(which));
         Main.panel.addToStatusArea('claude-usage', this._indicator, 0, 'right');
 
         this._settings.connect('changed', () => {
@@ -227,6 +269,8 @@ export default class ClaudeUsageExtension extends Extension {
                 const seven = extractUtil(data, 'seven_day');
                 if (five  >= 0) this._fivePct  = five;
                 if (seven >= 0) this._sevenPct = seven;
+                this._fiveResetMs  = extractResetMs(data, 'five_hour');
+                this._sevenResetMs = extractResetMs(data, 'seven_day');
                 this._firstDone = true;
             } catch (e) {
                 this._fail(this._t('fail.parse'), manual);
@@ -238,6 +282,15 @@ export default class ClaudeUsageExtension extends Extension {
             this._refreshing = false;
             this._inflight = false;
         }
+    }
+
+    _tooltipText(which) {
+        const ms = (which === 'five') ? this._fiveResetMs : this._sevenResetMs;
+        if (!ms) return '';
+        const now = Date.now();
+        if (which === 'five')
+            return this._t('tooltip.5h', {time: fmtClock(ms), rel: fmtHM(ms - now)});
+        return this._t('tooltip.7d', {rel: fmtDH(ms - now)});
     }
 
     _fail(reason, manual) {
@@ -308,4 +361,39 @@ function extractUtil(data, key) {
     const u = o.utilization;
     if (typeof u === 'number') return Math.round(u);
     return -1;
+}
+
+function extractResetMs(data, key) {
+    const o = data?.[key];
+    if (!o || typeof o !== 'object') return 0;
+    const v = o.resets_at ?? o.reset_at ?? o.resetsAt;
+    if (typeof v === 'string') {
+        const t = Date.parse(v);
+        if (!isNaN(t)) return t;
+    } else if (typeof v === 'number') {
+        // accept seconds or milliseconds since epoch
+        return v < 1e12 ? v * 1000 : v;
+    }
+    return 0;
+}
+
+function pad2(n) { return (n < 10 ? '0' : '') + n; }
+
+function fmtClock(ms) {
+    const d = new Date(ms);
+    return pad2(d.getHours()) + ':' + pad2(d.getMinutes());
+}
+
+function fmtHM(deltaMs) {
+    let s = Math.max(0, Math.floor(deltaMs / 1000));
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    return h + 'h ' + m + 'm';
+}
+
+function fmtDH(deltaMs) {
+    let s = Math.max(0, Math.floor(deltaMs / 1000));
+    const d = Math.floor(s / 86400);
+    const h = Math.floor((s % 86400) / 3600);
+    return d + 'd ' + h + 'h';
 }

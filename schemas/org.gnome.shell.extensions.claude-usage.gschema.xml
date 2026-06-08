@@ -3,11 +3,11 @@
   <schema id="org.gnome.shell.extensions.claude-usage"
           path="/org/gnome/shell/extensions/claude-usage/">
     <key name="colo" type="s">
-      <default>'NRT'</default>
+      <default>'SIN'</default>
       <summary>Expected Cloudflare colo</summary>
     </key>
     <key name="loc" type="s">
-      <default>'JP'</default>
+      <default>'SG'</default>
       <summary>Expected loc (country code)</summary>
     </key>
     <key name="credentials-path" type="s">

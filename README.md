@@ -20,7 +20,7 @@ Default refresh: every 3 minutes. Lower values risk HTTP 429.
 
 Before each usage call, the extension does `GET https://claude.ai/cdn-cgi/trace` and checks `colo` / `loc`:
 
-- Both must match the configured values (default `NRT` / `JP`, i.e. Tokyo)
+- Both must match the configured values (default `SIN` / `SG`, i.e. Singapore)
 - If they don't match, the call is skipped and you get one notification (won't spam)
 
 If you don't proxy, just set `colo` / `loc` to whatever your real exit node reports.
@@ -53,8 +53,8 @@ Open the extension preferences:
 
 | Field | Meaning |
 | --- | --- |
-| colo | Expected Cloudflare colo, default `NRT` |
-| loc | Expected country code, default `JP` |
+| colo | Expected Cloudflare colo, default `SIN` |
+| loc | Expected country code, default `SG` |
 | jsonpath | Path to `credentials.json`, empty = auto-detect |
 | interval (min) | Refresh interval, default 3 |
 | Require manual first refresh | Don't auto-fetch on login; wait for a click |

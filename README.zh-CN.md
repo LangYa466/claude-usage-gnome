@@ -20,7 +20,7 @@ GNOME Shell 扩展，在顶栏显示 Claude 订阅最近 5 小时窗口和 7 天
 
 每次请求 usage 之前，先 GET `https://claude.ai/cdn-cgi/trace`，看里面的 `colo` 和 `loc`：
 
-- 两个都跟设置里一致（默认 `NRT` / `JP`，东京出口）才发请求
+- 两个都跟设置里一致（默认 `SIN` / `SG`，新加坡出口）才发请求
 - 对不上就跳过这次，弹一条系统通知（同一次掉到错误节点只提醒一次）
 
 用不上代理校验的话，把 colo / loc 改成你当前出口的值就行。
@@ -53,8 +53,8 @@ gnome-extensions install --force claude-usage@langya466.github.com.zip
 
 | 项 | 说明 |
 | --- | --- |
-| colo | 期望的 Cloudflare 节点，默认 `NRT` |
-| loc | 期望的国家代码，默认 `JP` |
+| colo | 期望的 Cloudflare 节点，默认 `SIN` |
+| loc | 期望的国家代码，默认 `SG` |
 | jsonpath | `credentials.json` 路径，留空自动找 |
 | 间隔(分) | 刷新间隔，默认 3 |
 | 开机后首次必须手动刷新 | 勾上后开机不自动拉，要你手动点一次 5h/7d 才触发首次获取 |

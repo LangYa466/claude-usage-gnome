@@ -21,32 +21,60 @@ const MIN_SPIN_MS = 600;
 
 const GEO_UNKNOWN = 0, GEO_OK = 1, GEO_MISMATCH = 2, GEO_ERROR = 3;
 
+// One panel button holding both 5h and 7d labels side-by-side so the system
+// tray cannot insert other indicators (Rime, etc.) between them.
 const ClaudeIndicator = GObject.registerClass(
 class ClaudeIndicator extends PanelMenu.Button {
-    _init(name, prefix, onClick) {
+    _init(name, onClick) {
         super._init(0.0, name);
-        this._prefix = prefix;
-        this._label = new St.Label({
-            text: prefix + '-- %',
+
+        const box = new St.BoxLayout({
+            vertical: false,
+            style_class: 'claude-usage-box',
+            y_align: Clutter.ActorAlign.CENTER,
+        });
+        this.add_child(box);
+
+        this._fiveLabel = new St.Label({
+            text: '5h: -- %',
             y_align: Clutter.ActorAlign.CENTER,
             style_class: 'claude-usage-label',
         });
-        this.add_child(this._label);
+        this._sep = new St.Label({
+            text: '  ',
+            y_align: Clutter.ActorAlign.CENTER,
+        });
+        this._sevenLabel = new St.Label({
+            text: '7d: -- %',
+            y_align: Clutter.ActorAlign.CENTER,
+            style_class: 'claude-usage-label',
+        });
+        box.add_child(this._fiveLabel);
+        box.add_child(this._sep);
+        box.add_child(this._sevenLabel);
+
         this.connect('button-press-event', () => {
             onClick();
             return Clutter.EVENT_STOP;
         });
     }
 
-    setPercent(pct) {
+    _fmt(prefix, pct) {
         let num = (pct < 0) ? '--' : String(pct);
         if (num.length < 2) num = ' ' + num;
-        this._label.set_text(this._prefix + num + ' %');
+        return prefix + num + ' %';
+    }
+
+    setPercents(fivePct, sevenPct) {
+        this._fiveLabel.set_text(this._fmt('5h: ', fivePct));
+        this._sevenLabel.set_text(this._fmt('7d: ', sevenPct));
     }
 
     setRefreshing(frame) {
         const sp = ['|', '/', '-', '\\'];
-        this._label.set_text(this._prefix + '  ' + sp[frame & 3]);
+        const c = sp[frame & 3];
+        this._fiveLabel.set_text('5h:  ' + c);
+        this._sevenLabel.set_text('7d:  ' + c);
     }
 });
 
@@ -67,13 +95,10 @@ export default class ClaudeUsageExtension extends Extension {
         this._lastGeo = GEO_UNKNOWN;
         this._inflight = false;
 
-        this._fiveBtn  = new ClaudeIndicator(this._t('panel.name.5h'), '5h: ',
-                                              () => this._triggerManualRefresh());
-        this._sevenBtn = new ClaudeIndicator(this._t('panel.name.7d'), '7d: ',
-                                              () => this._triggerManualRefresh());
-
-        Main.panel.addToStatusArea('claude-usage-5h', this._fiveBtn,  0, 'right');
-        Main.panel.addToStatusArea('claude-usage-7d', this._sevenBtn, 1, 'right');
+        this._indicator = new ClaudeIndicator(
+            this._t('panel.name'),
+            () => this._triggerManualRefresh());
+        Main.panel.addToStatusArea('claude-usage', this._indicator, 0, 'right');
 
         this._settings.connect('changed', () => {
             this._lastGeo = GEO_UNKNOWN;
@@ -87,9 +112,8 @@ export default class ClaudeUsageExtension extends Extension {
     disable() {
         if (this._animTimer)  { GLib.source_remove(this._animTimer);  this._animTimer  = 0; }
         if (this._fetchTimer) { GLib.source_remove(this._fetchTimer); this._fetchTimer = 0; }
-        this._fiveBtn?.destroy();  this._fiveBtn  = null;
-        this._sevenBtn?.destroy(); this._sevenBtn = null;
-        this._session?.abort();    this._session  = null;
+        this._indicator?.destroy(); this._indicator = null;
+        this._session?.abort();     this._session   = null;
         this._settings = null;
         this._t = null;
     }
@@ -99,12 +123,10 @@ export default class ClaudeUsageExtension extends Extension {
             const spin = this._refreshing ||
                 (GLib.get_monotonic_time() / 1000 - this._refreshStart < MIN_SPIN_MS);
             if (spin) {
-                this._fiveBtn?.setRefreshing(this._animFrame);
-                this._sevenBtn?.setRefreshing(this._animFrame);
+                this._indicator?.setRefreshing(this._animFrame);
                 this._animFrame++;
             } else {
-                this._fiveBtn?.setPercent(this._fivePct);
-                this._sevenBtn?.setPercent(this._sevenPct);
+                this._indicator?.setPercents(this._fivePct, this._sevenPct);
             }
             return GLib.SOURCE_CONTINUE;
         });

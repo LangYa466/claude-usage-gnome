@@ -1,51 +1,71 @@
-# Claude 用量 — GNOME Shell 扩展
+# claude-usage-gnome
 
-把 [trafficmonitor-claude-usage](https://github.com/LangYa466/trafficmonitor-claude-usage) 移植到 GNOME。
+> [简体中文](./README.zh-CN.md)
 
-顶栏显示两块：`5h: XX %` 和 `7d: XX %`，分别是 Claude 订阅最近 5 小时窗口和 7 天窗口的用量百分比。
+GNOME Shell extension that shows your Claude subscription usage (5h / 7d windows) in the top panel.
 
-## 数据来源
+GNOME port of [trafficmonitor-claude-usage](https://github.com/LangYa466/trafficmonitor-claude-usage).
 
-跟 Claude Code 自己用的一样：
+## How it works
 
-- 读 `~/.claude/.credentials.json` 里的 `accessToken`
-- 拿它去打 `https://api.anthropic.com/api/oauth/usage`
-- 取响应里 `five_hour` / `seven_day` 的 `utilization`
+Same data path Claude Code itself uses:
 
-默认每 3 分钟刷一次。打太勤会被限流（HTTP 429）。
+- Reads `accessToken` from `~/.claude/.credentials.json`
+- Calls `https://api.anthropic.com/api/oauth/usage`
+- Shows `five_hour.utilization` and `seven_day.utilization` as percentages
 
-## 出口节点校验
+Default refresh: every 3 minutes. Lower values risk HTTP 429.
 
-每次请求 usage 之前，先 GET `https://claude.ai/cdn-cgi/trace`，看里面的 `colo`（Cloudflare 节点）和 `loc`（国家）：
+## Exit-node check
 
-- 两个都跟设置里一致（默认 `NRT` / `JP`，东京出口）才发请求
-- 对不上就跳过这次，弹一条系统通知（同一次掉到错误节点只提醒一次）
+Before each usage call, the extension does `GET https://claude.ai/cdn-cgi/trace` and checks `colo` / `loc`:
 
-用不上代理校验的话，把 colo / loc 改成你当前出口的值就行。
+- Both must match the configured values (default `NRT` / `JP`, i.e. Tokyo)
+- If they don't match, the call is skipped and you get one notification (won't spam)
 
-## 安装
+If you don't proxy, just set `colo` / `loc` to whatever your real exit node reports.
+
+## Install
+
+### From source
 
 ```sh
-make install         # 装到 ~/.local/share/gnome-shell/extensions/
-# 然后 注销重新登录，或 X11 下按 Alt+F2 → r → 回车
+git clone https://github.com/LangYa466/claude-usage-gnome
+cd claude-usage-gnome
+make install
+```
+
+Log out and back in (or on X11: `Alt+F2` → `r`), then:
+
+```sh
 gnome-extensions enable claude-usage@langya466.github.com
 ```
 
-## 设置
+### From release zip
 
-GNOME 扩展应用打开「Claude 用量」的设置：
+```sh
+gnome-extensions install --force claude-usage@langya466.github.com.zip
+```
 
-| 项 | 说明 |
+## Settings
+
+Open the extension preferences:
+
+| Field | Meaning |
 | --- | --- |
-| colo | 期望的 Cloudflare 节点，默认 `NRT` |
-| loc | 期望的国家代码，默认 `JP` |
-| jsonpath | `credentials.json` 路径，留空自动找 |
-| 间隔(分) | 刷新间隔，默认 3 |
-| 开机后首次必须手动刷新 | 勾上后开机不自动拉，要你手动点一次 5h/7d 才触发首次获取 |
+| colo | Expected Cloudflare colo, default `NRT` |
+| loc | Expected country code, default `JP` |
+| jsonpath | Path to `credentials.json`, empty = auto-detect |
+| interval (min) | Refresh interval, default 3 |
+| Require manual first refresh | Don't auto-fetch on login; wait for a click |
 
-## 手动刷新
+## Manual refresh
 
-左键点顶栏的 5h 或 7d，立刻强制刷新一次。刷新中数字会变成滚动字符（`| / - \`），刷完变回百分比。失败会弹通知。
+Left-click `5h` or `7d` to force a refresh. A `| / - \` spinner shows during the refresh. Failures pop a system notification.
+
+## Compatibility
+
+GNOME Shell **45 / 46 / 47 / 48**.
 
 ## License
 
